@@ -104,14 +104,19 @@ Parse.Cloud.define("pollPosted", function (request, response) {
     });
 });
 
+/*
+    Used to resend the e-mail verification code.
+*/
 Parse.Cloud.define("resendVerification", function (request, response) {
 
+    // Verifying parameters
     if (!request.user) {
-        response.error("No user");
+        response.error("There is no user making the request, or user is not saved");
     } else if (!request.user.get("email")) {
         response.error("User has no email");
     }
 
+    // Save with new e-mail than revert. This will send a new verification code.
     var emailBkp = request.user.get("email");
     request.user.save("email", null, {
         success: function () {
