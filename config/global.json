@@ -1,0 +1,18 @@
+{
+  "global": {
+    "parseVersion": "1.4.2"
+  },
+  "applications": {
+    "Fashion Now": {
+      "applicationId": "Yiuaalmc4UFWxpLHfVHPrVLxrwePtsLfiEt8es9q",
+      "masterKey": "4PxMnaGeJX5mKQrkF6OzjjrY2G7M7whTMECGkJdO"
+    },
+    "FNTest": {
+      "applicationId": "AIQ4OyhhFVequZa6eXLCDdEpxu9qE0JyFkkfczWw",
+      "masterKey": "nqekAUqBj6dUuJVRS1mo4R3ocGfGSxZGbxpyaZc1"
+    },
+    "_default": {
+      "link": "Fashion Now"
+    }
+  }
+}
