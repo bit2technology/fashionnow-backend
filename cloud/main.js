@@ -105,7 +105,7 @@ Parse.Cloud.define("pollPosted", function (request, response) {
 });
 
 /*
-    Used to resend the e-mail verification code.
+    Used to send the e-mail verification code again.
 */
 Parse.Cloud.define("resendVerification", function (request, response) {
 
@@ -139,8 +139,19 @@ Parse.Cloud.define("resendVerification", function (request, response) {
     });
 });
 
+/*
+    Used to return the location of devices with the app installed.
+    Returns:
+    - Array of Installation (with only the location field)
+*/
 Parse.Cloud.define("deviceLocations", function (request, response) {
-    "use strict";
+
+    // Verifying parameters
+    if (!request.user) {
+        response.error("There is no user making the request, or user is not saved");
+    } else if (!request.user.get("admin")) {
+        response.error("User making the request is not an administrator");
+    }
 
     var query = new Parse.Query(Parse.Installation)
         .select("location")
@@ -158,8 +169,10 @@ Parse.Cloud.define("deviceLocations", function (request, response) {
     });
 });
 
+/*
+    Used to automatically set the facebookId for the user when it logs with Facebook
+*/
 Parse.Cloud.beforeSave(Parse.User, function (request, response) {
-    "use strict";
 
     // Get Facebook authorization info
     var auth = request.object.get("authData"),
@@ -170,42 +183,12 @@ Parse.Cloud.beforeSave(Parse.User, function (request, response) {
     response.success();
 });
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// ####################### COMPATIBILITY WITH OLD VERSIONS #######################
-
-Parse.Cloud.beforeSave(Parse.Installation, function (request, response) {
-
-    // Get Facebook authorization info
-    if (!request.object.get("pushVersion")) {
-        request.object.set("pushVersion", request.object.get("appVersion") >= 2607 ? 1 : 0);
-    }
-
-    response.success();
-});
+// ####################### DEPRECATED - AVOID USING THESE FUNCTIONS #######################
 
 Parse.Cloud.afterSave("Poll", function (request) {
 
-    var hasVoteRedundancy = request.object.get("version") > 1;
-    if (!hasVoteRedundancy) {
+    var localizedNotification = request.object.get("version") > 1;
+    if (!localizedNotification) {
 
         var query = new Parse.Query(Parse.Installation);
         query.containedIn("userId", request.object.get("userIds"));
@@ -230,7 +213,6 @@ Parse.Cloud.afterSave("Poll", function (request) {
 });
 
 Parse.Cloud.beforeSave("Vote", function (request, response) {
-    "use strict";
 
     if (!request.object.get("pollCreatedBy")) {
 
@@ -250,7 +232,7 @@ Parse.Cloud.beforeSave("Vote", function (request, response) {
 });
 
 Parse.Cloud.define("sendPush", function (request, response) {
-    "use strict";
+
     var query = new Parse.Query(Parse.Installation),
         locKey = "P002",
         locArgs = [request.params.from];
