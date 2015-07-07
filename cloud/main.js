@@ -1,4 +1,4 @@
-// ####################### Fashion Now: Cloud Code #######################
+// ##################################################################### Fashion Now: Cloud Code #####################################################################
 
 /*
     ATTENTION: STILL IN DEVELOPMENT!!!
@@ -166,7 +166,7 @@ Parse.Cloud.define("deviceLocations", function (request, response) {
 });
 
 /*
-    Used to automatically set the facebookId for the user when it logs with Facebook
+    Used to automatically set the facebookId for the user when it logs with Facebook and the search field
 */
 Parse.Cloud.beforeSave(Parse.User, function (request, response) {
 
@@ -176,10 +176,35 @@ Parse.Cloud.beforeSave(Parse.User, function (request, response) {
     // Update facebookId
     request.object.set("facebookId", facebookAuth ? facebookAuth.id : null);
 
+    request.object.set("search", (request.object.get("name") || "").toLowerCase() + " " + (request.object.get("username") || "").toLowerCase() + " " + (request.object.get("email") || "").toLowerCase());
+
     response.success();
 });
 
-// ####################### DEPRECATED - AVOID USING THESE FUNCTIONS #######################
+// ##################################################################### BACKGROUND JOBS #####################################################################
+
+/*
+    Used set the search field of all users.
+*/
+Parse.Cloud.job("makeUserSearchable", function(request, status) {
+    // Set up to modify user data
+    Parse.Cloud.useMasterKey();
+    // Query for all users
+    var query = new Parse.Query(Parse.User).doesNotExist("search");
+    query.each(function(user) {
+        // Set and save the change
+        user.set("search", (user.get("name") || "").toLowerCase() + " " + (user.get("username") || "").toLowerCase() + " " + (user.get("email") || "").toLowerCase());
+        return user.save();
+    }).then(function() {
+        // Set the job's success status
+        status.success("Migration completed successfully.");
+    }, function(error) {
+        // Set the job's error status
+        status.error("Uh oh, something went wrong.");
+    });
+});
+
+// ##################################################################### DEPRECATED - AVOID USING THESE FUNCTIONS #####################################################################
 
 Parse.Cloud.afterSave("Poll", function (request) {
 
