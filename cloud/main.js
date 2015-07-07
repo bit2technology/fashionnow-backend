@@ -190,7 +190,7 @@ Parse.Cloud.job("makeUserSearchable", function(request, status) {
     // Set up to modify user data
     Parse.Cloud.useMasterKey();
     // Query for all users
-    var query = new Parse.Query(Parse.User).doesNotExist("search").limit(1000);
+    var query = new Parse.Query(Parse.User).doesNotExist("search");
     query.each(function(user) {
         // Set and save the change
         user.set("search", (user.get("name") || "").toLowerCase() + " " + (user.get("username") || "").toLowerCase() + " " + (user.get("email") || "").toLowerCase());
