@@ -116,7 +116,7 @@ Parse.Cloud.define("resendVerification", function (request, response) {
         response.error("User has no email");
     }
 
-    // Save with new e-mail than revert. This will send a new verification code.
+    // Save with new e-mail then revert. This will send a new verification code.
     var emailBkp = request.user.get("email");
     request.user.save("email", null, {
         success: function () {
@@ -153,11 +153,7 @@ Parse.Cloud.define("deviceLocations", function (request, response) {
         response.error("User making the request is not an administrator");
     }
 
-    var query = new Parse.Query(Parse.Installation)
-        .select("location")
-        .exists("location")
-        .limit(1000);
-
+    var query = new Parse.Query(Parse.Installation).select("location").exists("location").limit(1000);
     query.find({
         useMasterKey: true,
         success: function (results) {
