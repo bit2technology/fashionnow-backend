@@ -4,7 +4,7 @@
     ATTENTION: STILL IN DEVELOPMENT!!!
     Used when an user chose to follow another user. This function sets the follow relationship for both users and send a notification to the user that was followed
     Parameters:
-    - userId: User ID of the user to follow
+    - user: User ID of the user to follow
     Push sent:
     - Title: New Follower (P004)
     - Body: <user_display_name> is now following you (P005)
@@ -15,14 +15,14 @@ Parse.Cloud.define("followUser", function (request, response) {
     // Verifying parameters
     if (!request.user) {
         response.error("There is no user making the request, or user is not saved");
-    } else if (!request.params.userId) {
+    } else if (!request.params.user) {
         response.error("Parameter missing: userId - User ID of the user to follow");
     }
 
     // TODO: Set following
 
     // Send push notification
-    var query = new Parse.Query(Parse.Installation).equalTo("userId", request.params.userId).greaterThanOrEqualTo("pushVersion", 2),
+    var query = new Parse.Query(Parse.Installation).equalTo("userId", request.params.user).greaterThanOrEqualTo("pushVersion", 2),
         locArgs = [request.user.get("name") || request.user.get("username")]; // Display name of the follower, for the push notification
     Parse.Push.send({
         where: query,
