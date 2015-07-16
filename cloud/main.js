@@ -1,50 +1,92 @@
-// ##################################################################### Fashion Now: Cloud Code #####################################################################
+/* global Parse */
+/* ERROR CODES: https://parse.com/docs/js/guide#errors */
 
 /*
     ATTENTION: STILL IN DEVELOPMENT!!!
-    Used when an user chose to follow another user. This function sets the follow relationship for both users and send a notification to the user that was followed
+    Used when an user chose to follow another user. This function sets the follow relationship for both users and send a notification to the user that was followed.
     Parameters:
-    - user: User ID of the user to follow
+    - userId: User ID of the user to follow
     Push sent:
     - Title: New Follower (P004)
     - Body: <user_display_name> is now following you (P005)
     - follower: User ID of the follower
 */
-Parse.Cloud.define("followUser", function (request, response) {
+Parse.Cloud.define('followUser', function (request, response) {
 
     // Verifying parameters
     if (!request.user) {
         response.error("There is no user making the request, or user is not saved");
-    } else if (!request.params.user) {
+    } else if (!request.params.userId) {
         response.error("Parameter missing: userId - User ID of the user to follow");
     }
 
     // TODO: Set following
+});
 
-    // Send push notification
-    var query = new Parse.Query(Parse.Installation).equalTo("userId", request.params.user).greaterThanOrEqualTo("pushVersion", 2),
-        locArgs = [request.user.get("name") || request.user.get("username")]; // Display name of the follower, for the push notification
-    Parse.Push.send({
-        where: query,
-        data: {
-            alert: {
-                "title-loc-key": "P004",
-                "loc-key": "P005",
-                "loc-args": locArgs
-            },
-            badge: "Increment",
-            follower: request.user.id
-        }
-    }, {
-        success: function () {
-            // Push successfull
-            response.success("Success");
+/*
+    Used when an user voted on a poll.
+    Parameters:
+    - pollId: Id of poll voted
+    - vote: one of the options 1 (left), 2 (right) or 0 (skip)
+    Return:
+    - array containing the Poll and the Vote objects
+*/
+Parse.Cloud.define("votePoll", function (request, response) {
+
+    // Verifying parameters
+    if (!request.user) {
+        response.error("There is no user making the request, or user is not saved");
+    } else if (!request.params.pollId) {
+        response.error("Parameter missing: pollId - Id of poll voted");
+    } else if (request.params.vote === undefined) {
+        response.error("Parameter missing: vote - one of the options 1 (left), 2 (right) or 0 (skip)");
+    } else if (request.params.vote != 1 && request.params.vote != 2 && request.params.vote != 0) {
+        response.error("Parameter wrong: vote - is neither 1 (left), 2 (right) or 0 (skip)");
+    }
+    
+    // Get Poll
+    new Parse.Query("Poll").get(request.params.pollId, {
+        success: function(poll) {
+            
+            // Verify if user already voted
+            new Parse.Query("Vote").equalTo("voteBy", request.user).equalTo("pollId", request.params.pollId).first({
+                success: function (equalVote) {
+                    
+                    if (equalVote) { // Found a vote with this user and this pollId
+                        response.error("Error: User already voted");
+                    } else {
+                        
+                        // Create vote
+                        var acl = new Parse.ACL();
+                        acl.setReadAccess(request.user.id, true);
+                        acl.setReadAccess(poll.get("createdBy").id, true);
+                        var vote = new Parse.Object("Vote").setACL(acl).set("voteBy", request.user).set("pollId", poll.Id).set("vote", request.params.vote).set("version", 3);
+                        // Update poll
+                        poll.increment("voteTotalCount");
+                        if (request.params.vote > 0) {
+                            poll.increment("vote" + request.params.vote + "Count");
+                        }
+                        // Save
+                        Parse.Object.saveAll([poll, vote], {
+                            useMasterKey: true,
+                            success: function (list) {
+                                response.success(list);
+                            },
+                            error: function (error) {
+                                response.error("Save error: " + error.code);
+                            }
+                        });
+                    }
+                },
+                error: function (error) {
+                    response.error("Vote query error: " + error.code);
+                }
+            });
         },
-        error: function (error) {
-            // Handle error
-            response.error("Error: " + error);
+        error: function(object, error) {
+            response.error("Poll query error: " + error.code);
         }
-    });
+    });  
 });
 
 /*
@@ -186,7 +228,7 @@ Parse.Cloud.beforeSave(Parse.User, function (request, response) {
 /*
     Used set the search field of all users.
 */
-Parse.Cloud.job("makeUserSearchable", function(request, status) {
+Parse.Cloud.job("makeUsersSearchable", function (request, status) {
     // Set up to modify user data
     Parse.Cloud.useMasterKey();
     // Query for all users
@@ -230,25 +272,6 @@ Parse.Cloud.afterSave("Poll", function (request) {
                 console.error("Poll afterSave error: " + error);
             }
         });
-    }
-});
-
-Parse.Cloud.beforeSave("Vote", function (request, response) {
-
-    if (!request.object.get("pollCreatedBy")) {
-
-        new Parse.Query("Poll").include("createdBy").select(["createdBy"]).get(request.object.get("pollId"), {
-            success: function (poll) {
-                request.object.set("pollCreatedBy", poll.get("createdBy").id);
-                request.object.set("pollCreatedAt", poll.createdAt);
-                response.success();
-            },
-            error: function (poll, error) {
-                response.error("Get poll" + poll + " error " + error);
-            }
-        });
-    } else {
-        response.success();
     }
 });
 
