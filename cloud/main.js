@@ -218,7 +218,7 @@ Parse.Cloud.beforeSave(Parse.User, function (request, response) {
     // Update facebookId
     request.object.set("facebookId", facebookAuth ? facebookAuth.id : null);
 
-    request.object.set("search", (request.object.get("name") || "").toLowerCase() + " " + (request.object.get("username") || "").toLowerCase() + " " + (request.object.get("email") || "").toLowerCase());
+    request.object.set("search", ((request.object.get("name") || "") + " " + (request.object.get("username") || "") + " " + (request.object.get("email") || "")).toLowerCase());
 
     response.success();
 });
@@ -247,33 +247,6 @@ Parse.Cloud.job("makeUsersSearchable", function (request, status) {
 });
 
 // ##################################################################### DEPRECATED - AVOID USING THESE FUNCTIONS #####################################################################
-
-Parse.Cloud.afterSave("Poll", function (request) {
-
-    var localizedNotification = request.object.get("version") > 1;
-    if (!localizedNotification) {
-
-        var query = new Parse.Query(Parse.Installation);
-        query.containedIn("userId", request.object.get("userIds"));
-
-        Parse.Push.send({
-            where: query,
-            data: {
-                alert: (request.user ? request.user.get("name") : "Um amigo") + " precisa de ajuda" + (request.object.get("caption") ? ": \"" + request.object.get("caption") + "\"" : ""),
-                badge: "Increment"
-            }
-        }, {
-            success: function () {
-                // Push successfull
-                console.log("Poll afterSave successful");
-            },
-            error: function (error) {
-                // Handle error
-                console.error("Poll afterSave error: " + error);
-            }
-        });
-    }
-});
 
 Parse.Cloud.define("sendPush", function (request, response) {
 
@@ -312,28 +285,3 @@ Parse.Cloud.define("sendPush", function (request, response) {
         }
     });
 });
-
-//Parse.Cloud.afterSave("Vote", function (request) {
-//    "use strict";
-//
-//    if (request.object.get("vote") > 0) {
-//
-//        var query = new Parse.Query(Parse.Installation);
-//        query.equalTo("userId", request.object.get("userId"));
-//
-//        Parse.Push.send({
-//            where: query,
-//            data: {
-//                alert: "Sua enquete recebeu um voto",
-//                badge: "Increment"
-//            }
-//        }, {
-//            success: function () {
-//                console.log("Push sent");
-//            },
-//            error: function (error) {
-//                console.error("Push error " + error);
-//            }
-//        });
-//    }
-//});
