@@ -2,34 +2,10 @@
 /* ERROR CODES: https://parse.com/docs/js/guide#errors */
 
 /*
-    ATTENTION: STILL IN DEVELOPMENT!!!
-    Used when an user chose to follow another user. This function sets the follow relationship for both users and send a notification to the user that was followed.
-    Parameters:
-    - userId: User ID of the user to follow
-    Push sent:
-    - Title: New Follower (P004)
-    - Body: <user_display_name> is now following you (P005)
-    - follower: User ID of the follower
-*/
-Parse.Cloud.define('followUser', function (request, response) {
-
-    // Verifying parameters
-    if (!request.user) {
-        response.error("There is no user making the request, or user is not saved");
-    } else if (!request.params.userId) {
-        response.error("Parameter missing: userId - User ID of the user to follow");
-    }
-
-    // TODO: Set following
-});
-
-/*
     Used when an user voted on a poll.
     Parameters:
     - pollId: Id of poll voted
     - vote: one of the options 1 (left), 2 (right) or 0 (skip)
-    Return:
-    - array containing the Poll and the Vote objects
 */
 Parse.Cloud.define("votePoll", function (request, response) {
 
@@ -49,7 +25,7 @@ Parse.Cloud.define("votePoll", function (request, response) {
         success: function(poll) {
             
             // Verify if user already voted
-            new Parse.Query("Vote").equalTo("voteBy", request.user).equalTo("pollId", request.params.pollId).first({
+            new Parse.Query("Vote").equalTo("voteBy", request.user).equalTo("pollId", poll.id).first({
                 success: function (equalVote) {
                     
                     if (equalVote) { // Found a vote with this user and this pollId
@@ -60,7 +36,7 @@ Parse.Cloud.define("votePoll", function (request, response) {
                         var acl = new Parse.ACL();
                         acl.setReadAccess(request.user.id, true);
                         acl.setReadAccess(poll.get("createdBy").id, true);
-                        var vote = new Parse.Object("Vote").setACL(acl).set("voteBy", request.user).set("pollId", poll.Id).set("vote", request.params.vote).set("version", 3);
+                        var vote = new Parse.Object("Vote").setACL(acl).set("voteBy", request.user).set("pollId", poll.id).set("vote", request.params.vote).set("version", 3);
                         // Update poll
                         poll.increment("voteTotalCount");
                         if (request.params.vote > 0) {
@@ -70,7 +46,7 @@ Parse.Cloud.define("votePoll", function (request, response) {
                         Parse.Object.saveAll([poll, vote], {
                             useMasterKey: true,
                             success: function (list) {
-                                response.success(list);
+                                response.success(true);
                             },
                             error: function (error) {
                                 response.error("Save error: " + error.code);
@@ -87,63 +63,6 @@ Parse.Cloud.define("votePoll", function (request, response) {
             response.error("Poll query error: " + error.code);
         }
     });  
-});
-
-/*
-    Used when a poll was posted.
-    Parameters:
-    - to: Array of user IDs to send a notification about the new poll
-    - poll: ID of the new poll
-    - caption: Optional description of the poll
-    Push sent:
-    - Title: New Poll (P001)
-    - Body: <user_display_name> needs help (P002) *OR* <user_display_name> needs help: "<poll_caption>" (P003)
-    - poll: ID of the new poll
-*/
-Parse.Cloud.define("pollPosted", function (request, response) {
-
-    // Verifying parameters
-    if (!request.user) {
-        response.error("There is no user making the request, or user is not saved");
-    } else if (!request.params.to) {
-        response.error("Parameter missing: to - Array of user IDs to send the notification");
-    } else if (!request.params.poll) {
-        response.error("Parameter missing: poll - Posted poll ID");
-    }
-
-    // Declare localized variables
-    var locKey = "P002",
-        locArgs = [request.user.get("name") || request.user.get("username")];
-
-    // Change notification style if there is a caption
-    if (request.params.caption) {
-        locKey = "P003";
-        locArgs.push(request.params.caption);
-    }
-
-    // Send push notification
-    var query = new Parse.Query(Parse.Installation).containedIn("userId", request.params.to).greaterThanOrEqualTo("pushVersion", 1);
-    Parse.Push.send({
-        where: query,
-        data: {
-            alert: {
-                "title-loc-key": "P001",
-                "loc-key": locKey,
-                "loc-args": locArgs
-            },
-            badge: "Increment",
-            poll: request.params.poll
-        }
-    }, {
-        success: function () {
-            // Push successfull
-            response.success("Success");
-        },
-        error: function (error) {
-            // Handle error
-            response.error("Error: " + error);
-        }
-    });
 });
 
 /*
@@ -246,7 +165,89 @@ Parse.Cloud.job("makeUsersSearchable", function (request, status) {
     });
 });
 
+// ##################################################################### IN DEVELOPMENT #####################################################################
+
+/*
+    Used when an user chose to follow another user. This function sets the follow relationship for both users and send a notification to the user that was followed.
+    Parameters:
+    - followUserId: User ID of the user to follow
+    Push sent:
+    - Title: New Follower (P004)
+    - Body: <user_display_name> is now following you (P005)
+    - follower: User ID of the follower
+*/
+Parse.Cloud.define('followUser', function (request, response) {
+
+    // Verifying parameters
+    if (!request.user) {
+        response.error("There is no user making the request, or user is not saved");
+    } else if (!request.params.userId) {
+        response.error("Parameter missing: followUserId - User ID of the user to follow");
+    }
+
+    // TODO: Follow user
+});
+
+
+
 // ##################################################################### DEPRECATED - AVOID USING THESE FUNCTIONS #####################################################################
+
+/*
+    Used when a poll was posted.
+    Parameters:
+    - to: Array of user IDs to send a notification about the new poll
+    - poll: ID of the new poll
+    - caption: Optional description of the poll
+    Push sent:
+    - Title: New Poll (P001)
+    - Body: <user_display_name> needs help (P002) *OR* <user_display_name> needs help: "<poll_caption>" (P003)
+    - poll: ID of the new poll
+*/
+Parse.Cloud.define("pollPosted", function (request, response) {
+
+    // Verifying parameters
+    if (!request.user) {
+        response.error("There is no user making the request, or user is not saved");
+    } else if (!request.params.to) {
+        response.error("Parameter missing: to - Array of user IDs to send the notification");
+    } else if (!request.params.poll) {
+        response.error("Parameter missing: poll - Posted poll ID");
+    }
+
+    // Declare localized variables
+    var locKey = "P002",
+        locArgs = [request.user.get("name") || request.user.get("username")];
+
+    // Change notification style if there is a caption
+    if (request.params.caption) {
+        locKey = "P003";
+        locArgs.push(request.params.caption);
+    }
+
+    // Send push notification
+    var query = new Parse.Query(Parse.Installation).containedIn("userId", request.params.to).greaterThanOrEqualTo("pushVersion", 1);
+    Parse.Push.send({
+        where: query,
+        data: {
+            alert: {
+                "title-loc-key": "P001",
+                "loc-key": locKey,
+                "loc-args": locArgs
+            },
+            badge: "Increment",
+            poll: request.params.poll
+        }
+    }, {
+        success: function () {
+            // Push successfull
+            response.success("Success");
+        },
+        error: function (error) {
+            // Handle error
+            response.error("Error: " + error);
+        }
+    });
+});
 
 Parse.Cloud.define("sendPush", function (request, response) {
 
