@@ -20,7 +20,7 @@ Parse.Cloud.define("votePoll", function (request, response) {
         response.error("Parameter wrong: vote - is neither 1 (left), 2 (right) or 0 (skip)");
     }
     
-    // Get Poll
+    // Get poll
     new Parse.Query("Poll").get(request.params.pollId, {
         success: function(poll) {
             
@@ -170,22 +170,117 @@ Parse.Cloud.job("makeUsersSearchable", function (request, status) {
 /*
     Used when an user chose to follow another user. This function sets the follow relationship for both users and send a notification to the user that was followed.
     Parameters:
-    - followUserId: User ID of the user to follow
-    Push sent:
+    - userId: User ID of the user to follow
+    Push sent (if not mutual):
     - Title: New Follower (P004)
     - Body: <user_display_name> is now following you (P005)
-    - follower: User ID of the follower
+    - userId: User ID of the follower
+    Push sent (if mutual):
+    - Title: New Friend (P006)
+    - Body: Congratulations! You and <user_display_name> became friends. (P007)
+    - userId: User ID of the follower
 */
 Parse.Cloud.define('followUser', function (request, response) {
+    Parse.Cloud.useMasterKey();
 
     // Verifying parameters
     if (!request.user) {
         response.error("There is no user making the request, or user is not saved");
     } else if (!request.params.userId) {
-        response.error("Parameter missing: followUserId - User ID of the user to follow");
+        response.error("Parameter missing: userId - User ID of the user to follow");
+    } else if (request.params.userId == request.user.id) {
+        response.error("Parameter wrong: userId - User cannot follow itself");
+    }
+    var auth = request.user ? request.user.get("authData") : null;
+    var anonymous = auth ? auth.anonymous : null;
+    if (anonymous) {
+        response.error("The user making the request cannot be anonymous");
     }
 
-    // TODO: Follow user
+    // Get user to follow
+    new Parse.Query(Parse.User).include("authData").get(request.params.userId, {
+        success: function(userToFollow) {
+            var followingAuth = userToFollow.get("authData");
+            var followingAnon = followingAuth ? followingAuth.anonymous : null;
+            if (followingAnon) {
+                response.error("The user to follow cannot be anonymous");
+            }
+            
+            // Verify if is already following
+            new Parse.Query("Follow").equalTo("follower", request.user).equalTo("user", userToFollow).first({
+                success: function (alreadyFollow) {
+                    
+                    if (alreadyFollow) { // User is already following
+                        response.error("Error: User is already following");
+                    } else {
+                        
+                        // Verify if it is mutual
+                        new Parse.Query("Follow").equalTo("follower", userToFollow).equalTo("user", request.user).first({
+                            success: function (mutualFollow) {
+                                
+                                // Create follow
+                                var acl = new Parse.ACL(request.user);
+                                acl.setPublicReadAccess(true);
+                                var follow = new Parse.Object("Follow").setACL(acl).set("follower", request.user).set("user", userToFollow);
+                                var objectsToSave = [follow, request.user, userToFollow];
+                                // Update users
+                                request.user.increment("following");
+                                userToFollow.increment("followers");
+                                if (mutualFollow) { // User to follow is already following the new follower - Mark them friends
+                                    follow.set("mutual", true);
+                                    mutualFollow.set("mutual", true);
+                                    objectsToSave.push(mutualFollow);
+                                    request.user.increment("friends");
+                                    userToFollow.increment("friends");
+                                }
+                                // Save
+                                Parse.Object.saveAll(objectsToSave, {
+                                    success: function (list) {
+                                        
+                                        // Send push
+                                        var locTitle = "P004";
+                                        var locKey = "P005";
+                                        var locArgs = [request.user.get("name") || request.user.get("username")];
+                                        if (mutualFollow) {
+                                            locTitle = "P006";
+                                            locKey = "P007";
+                                        }
+                                        
+                                        Parse.Push.send({
+                                            where: new Parse.Query(Parse.Installation).equalTo("userId", userToFollow.id).greaterThanOrEqualTo("pushVersion", 2),
+                                            data: {
+                                                alert: {
+                                                    "title-loc-key": locTitle,
+                                                    "loc-key": locKey,
+                                                    "loc-args": locArgs
+                                                },
+                                                badge: "Increment",
+                                                userId: request.user.id
+                                            }
+                                        });
+                                        
+                                        response.success(request.user);
+                                    },
+                                    error: function (error) {
+                                        response.error("Save error: " + error.code);
+                                    }
+                                }); 
+                            },
+                            error: function (error) {
+                                response.error("Mutual follow query error: " + error.code);
+                            }
+                        });
+                    }
+                },
+                error: function (error) {
+                    response.error("Already follow query error: " + error.code);
+                }
+            });
+        },
+        error: function(object, error) {
+            response.error("User query error: " + error.code);
+        }
+    });  
 });
 
 
