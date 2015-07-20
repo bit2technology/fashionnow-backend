@@ -101,7 +101,7 @@ Parse.Cloud.define("resendVerification", function (request, response) {
 });
 
 /*
-    Used to return the location of devices with the app installed.
+    Used to return the location of devices with the app installed. Installation object needs the location field.
     Returns:
     - Array of Installation (with only the location field)
 */
@@ -137,6 +137,7 @@ Parse.Cloud.beforeSave(Parse.User, function (request, response) {
     // Update facebookId
     request.object.set("facebookId", facebookAuth ? facebookAuth.id : null);
 
+    // Set canonical search field
     request.object.set("search", ((request.object.get("name") || "") + " " + (request.object.get("username") || "") + " " + (request.object.get("email") || "")).toLowerCase());
 
     response.success();
