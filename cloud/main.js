@@ -226,8 +226,9 @@ Parse.Cloud.job("fixUsers", function (request, status) {
         var auth = user.get("authData");
         var facebookAuth = auth ? auth.facebook : null;
         if (facebookAuth && facebookAuth.access_token && !user.get("email")) {
+            var url = "https://graph.facebook.com/me?access_token=" + facebookAuth.access_token;
             Parse.Cloud.httpRequest({
-                url: "https://graph.facebook.com/me?access_token=" + facebookAuth.access_token,
+                url: url,
                 success: function(httpResponse) {
                     var facebookUser = JSON.parse(httpResponse.text);
                     if (!user.get("name")) {
@@ -243,7 +244,8 @@ Parse.Cloud.job("fixUsers", function (request, status) {
                     return user.save();
                 },
                 error: function(httpResponse) {
-                    status.error('Facebook request error: ' + httpResponse.status);
+                    console.error('Facebook request error: ' + httpResponse.status + " " + JSON.parse(httpResponse.text).error.message);
+                    return user.save();
                 }
             });
         } else {
