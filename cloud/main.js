@@ -2,6 +2,65 @@
 /* ERROR CODES: https://parse.com/docs/js/guide#errors */
 
 /*
+    Used to report unwanted polls.
+    Parameters:
+    - pollId: Id of poll the user wants to report
+    - comment (optional): Reason of why the user wants to report this poll
+    Push sent:
+    - Title: New Poll Report (P008)
+    - Body: A poll was reported (P009)
+    - pollId: Poll ID of the follower
+*/
+Parse.Cloud.define("reportPoll", function (request, response) {
+
+    // Verifying parameters
+    if (!request.user) {
+        response.error("There is no user making the request, or user is not saved");
+    } else if (!request.params.pollId) {
+       response.error("Parameter missing: pollId - Id of poll voted");
+    }
+    
+    // Get poll
+    new Parse.Query("Poll").get(request.params.pollId, {
+        success: function(poll) {
+            
+            // Create report
+            var acl = new Parse.ACL();
+            acl.setReadAccess(request.user.id, true);
+            var report = new Parse.Object("Report").setACL(acl).set("user", request.user).set("poll", poll).set("comment", request.params.comment);
+            // Update poll
+            poll.set("hidden", true);
+            // Save
+            Parse.Object.saveAll([poll, report], {
+                useMasterKey: true,
+                success: function (list) {
+                    
+                    Parse.Push.send({
+                        channels: ["report"],
+                        data: {
+                            alert: {
+                                "title-loc-key": "P008",
+                                "loc-key": "P009"
+                            },
+                            badge: "Increment",
+                            pollId: poll.id
+                        }
+                    });
+                    
+                    response.success(true);
+                },
+                error: function (error) {
+                    response.error("Save error: " + error.code);
+                }
+            });
+        },
+        error: function(object, error) {
+            response.error("Poll query error: " + error.code);
+        }
+    });
+});
+
+/*
     Used when an user voted on a poll.
     Parameters:
     - pollId: Id of poll voted
@@ -62,7 +121,7 @@ Parse.Cloud.define("votePoll", function (request, response) {
         error: function(object, error) {
             response.error("Poll query error: " + error.code);
         }
-    });  
+    });
 });
 
 /*
@@ -132,13 +191,22 @@ Parse.Cloud.define("deviceLocations", function (request, response) {
 Parse.Cloud.beforeSave(Parse.User, function (request, response) {
 
     // Get Facebook authorization info
-    var auth = request.object.get("authData"),
-        facebookAuth = auth ? auth.facebook : null;
+    var auth = request.object.get("authData");
+    var facebookAuth = auth ? auth.facebook : null;
     // Update facebookId
     request.object.set("facebookId", facebookAuth ? facebookAuth.id : null);
-
+    
     // Set canonical search field
-    request.object.set("search", ((request.object.get("name") || "") + " " + (request.object.get("username") || "") + " " + (request.object.get("email") || "")).toLowerCase());
+    request.object.set("search", searchField(request.object));
+    
+    // Set display name
+    if (request.object.get("name")) {
+        request.object.set("displayName", request.object.get("name"));
+    } else if (request.object.get("hasPassword")) {
+        request.object.set("displayName", request.object.get("username"));
+    } else {
+        request.object.unset("displayName");
+    }
 
     response.success();
 });
@@ -146,25 +214,57 @@ Parse.Cloud.beforeSave(Parse.User, function (request, response) {
 // ##################################################################### BACKGROUND JOBS #####################################################################
 
 /*
-    Used set the search field of all users.
+    Get missing info from Facebook. This will also trigger the before_save for each user.
 */
-Parse.Cloud.job("makeUsersSearchable", function (request, status) {
+Parse.Cloud.job("fixUsers", function (request, status) {
     // Set up to modify user data
     Parse.Cloud.useMasterKey();
     // Query for all users
-    var query = new Parse.Query(Parse.User).doesNotExist("search");
+    var query = new Parse.Query(Parse.User);
     query.each(function(user) {
-        // Set and save the change
-        user.set("search", (user.get("name") || "").toLowerCase() + " " + (user.get("username") || "").toLowerCase() + " " + (user.get("email") || "").toLowerCase());
-        return user.save();
+        // Get missing info from Facebook
+        var auth = user.get("authData");
+        var facebookAuth = auth ? auth.facebook : null;
+        if (facebookAuth && facebookAuth.access_token && !user.get("email")) {
+            Parse.Cloud.httpRequest({
+                url: "https://graph.facebook.com/me?access_token=" + facebookAuth.access_token,
+                success: function(httpResponse) {
+                    var facebookUser = JSON.parse(httpResponse.text);
+                    if (!user.get("name")) {
+                        user.set("name", facebookUser.first_name);
+                    }
+                    if (!user.get("gender")) {
+                        user.set("gender", facebookUser.gender);
+                    }
+                    user.save();
+                    if (!user.get("email")) {
+                        user.set("email", facebookUser.email);
+                    }
+                    return user.save();
+                },
+                error: function(httpResponse) {
+                    status.error('Facebook request error: ' + httpResponse.status);
+                }
+            });
+        } else {
+            return user.save();
+        }
     }).then(function() {
         // Set the job's success status
         status.success("Migration completed successfully.");
     }, function(error) {
         // Set the job's error status
-        status.error("Uh oh, something went wrong.");
+        status.error("Uh oh, something went wrong: " + error.code);
     });
 });
+
+// ##################################################################### HELPER FUNCTIONS #####################################################################
+
+var removeDiacritics = require('cloud/diacritics').remove;
+
+function searchField (user) {
+    return removeDiacritics((user.get("name") || "") + " " + (user.get("username") || "") + " " + (user.get("email") || "") + " " + (user.get("location") || "")).toLowerCase();
+}
 
 // ##################################################################### IN DEVELOPMENT #####################################################################
 
@@ -283,8 +383,6 @@ Parse.Cloud.define('followUser', function (request, response) {
         }
     });  
 });
-
-
 
 // ##################################################################### DEPRECATED - AVOID USING THESE FUNCTIONS #####################################################################
 
