@@ -278,7 +278,7 @@ function searchField (user) {
 /*
     Used to block unwanted users. Only affects the user making the request.
     Parameters:
-    - userId: Id of user to block
+    - userId: Id of user to block. Attention: this field won't be checked! The developer must provide a valid user ID on its own.
 */
 Parse.Cloud.define("blockUser", function (request, response) {
 
