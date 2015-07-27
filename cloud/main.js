@@ -2,7 +2,7 @@
 /* ERROR CODES: https://parse.com/docs/js/guide#errors */
 
 /*
-    Used to report unwanted polls.
+    Used to report unwanted polls. The poll will be unavailable to ALL users!
     Parameters:
     - pollId: Id of poll the user wants to report
     - comment (optional): Reason of why the user wants to report this poll
@@ -196,8 +196,13 @@ Parse.Cloud.beforeSave(Parse.User, function (request, response) {
     // Update facebookId
     request.object.set("facebookId", facebookAuth ? facebookAuth.id : null);
     
-    // Set canonical search field
-    request.object.set("search", searchField(request.object));
+    // Set canonical search field if user is not anonymous
+    var anonymous = auth ? auth.anonymous : null;
+    if (anonymous) {
+        request.object.unset("search");
+    } else {
+        request.object.set("search", searchField(request.object));
+    }
     
     // Set display name
     if (request.object.get("name")) {
@@ -269,6 +274,33 @@ function searchField (user) {
 }
 
 // ##################################################################### IN DEVELOPMENT #####################################################################
+
+/*
+    Used to block unwanted users. Only affects the user making the request.
+    Parameters:
+    - userId: Id of user to block
+*/
+Parse.Cloud.define("blockUser", function (request, response) {
+
+    // Verifying parameters
+    if (!request.user) {
+        response.error("There is no user making the request, or user is not saved");
+    } else if (!request.params.userId) {
+       response.error("Parameter missing: userId - Id of user to block");
+    }
+    
+    // Create and save block info
+    var acl = new Parse.ACL(request.user);
+    var block = new Parse.Object("Block").setACL(acl).set("user", request.user).set("blocked", Parse.User.createWithoutData(request.params.userId));
+    block.save({
+        success: function (block) {
+            response.success(true);
+        },
+        error: function (error) {
+            response.error("Save error: " + error.code);
+        }
+    });
+});
 
 /*
     Used when an user chose to follow another user. This function sets the follow relationship for both users and send a notification to the user that was followed.
