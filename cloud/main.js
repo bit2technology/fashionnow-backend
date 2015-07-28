@@ -418,6 +418,148 @@ Parse.Cloud.define('followUser', function (request, response) {
     });  
 });
 
+/*
+    Used when an user chose to unfollow another user. This function sets the follow relationship for both users.
+    Parameters:
+    - userId: User ID of the user to unfollow
+*/
+Parse.Cloud.define('unfollowUser', function (request, response) {
+    Parse.Cloud.useMasterKey();
+
+    // Verifying parameters
+    if (!request.user) {
+        response.error("There is no user making the request, or user is not saved");
+    } else if (!request.params.userId) {
+        response.error("Parameter missing: userId - User ID of the user to unfollow");
+    } else if (request.params.userId == request.user.id) {
+        response.error("Parameter wrong: userId - User cannot unfollow itself");
+    }
+
+    // Get user to unfollow
+    new Parse.Query(Parse.User).get(request.params.userId, {
+        success: function(userToUnfollow) {
+            
+            // Verify if is already following
+            new Parse.Query("Follow").equalTo("follower", request.user).equalTo("user", userToUnfollow).first({
+                success: function (alreadyFollow) {
+                    
+                    if (!alreadyFollow) { // User is not following
+                        response.error("Error: User is not following");
+                    } else {
+                        
+                        // Verify if it is mutual
+                        new Parse.Query("Follow").equalTo("follower", userToUnfollow).equalTo("user", request.user).first({
+                            success: function (mutualFollow) {
+                                
+                                var objectsToSave = [request.user, userToUnfollow];
+                                // Update users
+                                request.user.increment("following", -1);
+                                userToUnfollow.increment("followers", -1);
+                                if (mutualFollow) { // User to unfollow is following the user making the request - Undo friendship
+                                    mutualFollow.set("mutual", false);
+                                    objectsToSave.push(mutualFollow);
+                                    request.user.increment("friends", -1);
+                                    userToUnfollow.increment("friends", -1);
+                                }
+                                // Save
+                                Parse.Object.saveAll(objectsToSave, {
+                                    success: function (list) {
+                                        
+                                        alreadyFollow.destroy({
+                                            success: function (list) {
+                                                response.success(request.user);
+                                            },
+                                            error: function (error) {
+                                                response.error("Destroy error: " + error.code);
+                                            }
+                                        });
+                                    },
+                                    error: function (error) {
+                                        response.error("Save error: " + error.code);
+                                    }
+                                }); 
+                            },
+                            error: function (error) {
+                                response.error("Mutual follow query error: " + error.code);
+                            }
+                        });
+                    }
+                },
+                error: function (error) {
+                    response.error("Already follow query error: " + error.code);
+                }
+            });
+        },
+        error: function(object, error) {
+            response.error("User query error: " + error.code);
+        }
+    });  
+});
+
+/*
+    Used when a user wants to post a poll.
+    Parameters:
+    - to: Array of user IDs that will be able to see and vote, also send a notification about the new poll
+    - leftId: ID of the left photo. Attention: this field won't be checked! The developer must provide a valid photo ID on its own.
+    - rightId: ID of the right photo. Attention: this field won't be checked! The developer must provide a valid photo ID on its own.
+    - caption (optional): description of the poll
+    Push sent:
+    - Title: New Poll (P001)
+    - Body: <user_display_name> needs help (P002) *OR* <user_display_name> needs help: "<poll_caption>" (P003)
+    - poll: ID of the new poll
+*/
+Parse.Cloud.define("postPoll", function (request, response) {
+
+    // Verifying parameters
+    if (!request.user) {
+        response.error("There is no user making the request, or user is not saved");
+    } else if (!request.user.get("emailVerified") && !request.user.get("facebookId")) {
+        response.error("The user has not verified email or Facebook account");
+    } else if (!request.params.to) {
+        response.error("Parameter missing: to - Array of user IDs to send the notification");
+    } else if (!request.params.leftId) {
+        response.error("Parameter missing: leftId - ID of the left photo");
+    } else if (!request.params.rightId) {
+        response.error("Parameter missing: rightId - ID of the right photo");
+    }
+    
+    var ParsePhoto = Parse.Object.extend("Photo");
+
+    // // Declare localized variables
+    // var locKey = "P002",
+    //     locArgs = [request.user.get("name") || request.user.get("username")];
+
+    // // Change notification style if there is a caption
+    // if (request.params.caption) {
+    //     locKey = "P003";
+    //     locArgs.push(request.params.caption);
+    // }
+
+    // // Send push notification
+    // var query = new Parse.Query(Parse.Installation).containedIn("userId", request.params.to).greaterThanOrEqualTo("pushVersion", 1);
+    // Parse.Push.send({
+    //     where: query,
+    //     data: {
+    //         alert: {
+    //             "title-loc-key": "P001",
+    //             "loc-key": locKey,
+    //             "loc-args": locArgs
+    //         },
+    //         badge: "Increment",
+    //         poll: request.params.poll
+    //     }
+    // }, {
+    //     success: function () {
+    //         // Push successfull
+    //         response.success("Success");
+    //     },
+    //     error: function (error) {
+    //         // Handle error
+    //         response.error("Error: " + error);
+    //     }
+    // });
+});
+
 // ##################################################################### DEPRECATED - AVOID USING THESE FUNCTIONS #####################################################################
 
 /*
