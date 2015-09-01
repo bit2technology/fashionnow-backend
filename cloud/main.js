@@ -186,6 +186,55 @@ Parse.Cloud.define("deviceLocations", function (request, response) {
 });
 
 /*
+    Used to make canonical search of users.
+    Parameters:
+    - query: string to search for.
+    Returns:
+    - Array of Users
+*/
+Parse.Cloud.define("searchUsers", function (request, response) {
+
+    // Verifying parameters
+    if (!request.params.query) {
+        response.error("There is no string to search for");
+    }
+
+    var query = new Parse.Query(Parse.User).contains("search", removeDiacritics(request.params.query).toLowerCase()).descending("followers");
+    if (request.user) {
+        query.notEqualTo("id", request.user.id);
+    }
+    query.find({
+        success: function (results) {
+            response.success(results);
+        },
+        error: function (error) {
+            response.error(error);
+        }
+    });
+});
+
+/*
+    Used to get user recomendations.
+    Returns:
+    - Array of Users
+*/
+Parse.Cloud.define("trendingUsers", function (request, response) {
+
+    var query = new Parse.Query(Parse.User).exists("search").descending("followers");
+    if (request.user) {
+        query.notEqualTo("id", request.user.id);
+    }
+    query.find({
+        success: function (results) {
+            response.success(results);
+        },
+        error: function (error) {
+            response.error(error);
+        }
+    });
+});
+
+/*
     Used to automatically set the facebookId for the user when it logs with Facebook and the search field
 */
 Parse.Cloud.beforeSave(Parse.User, function (request, response) {
