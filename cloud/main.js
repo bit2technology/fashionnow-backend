@@ -546,6 +546,42 @@ Parse.Cloud.define('unfollowUser', function (request, response) {
 });
 
 /*
+    Used to check if the current user is following this user.
+    Parameters:
+    - userId: User ID of the user to check follow status
+*/
+Parse.Cloud.define('isFollowing', function (request, response) {
+
+    // Verifying parameters
+    if (!request.user) {
+        response.error("There is no user making the request, or user is not saved");
+    } else if (!request.params.userId) {
+        response.error("Parameter missing: userId - User ID of the user to unfollow");
+    } else if (request.params.userId == request.user.id) {
+        response.error("Parameter wrong: userId - User cannot (un)follow itself");
+    }
+
+    // Get user to unfollow
+    new Parse.Query(Parse.User).get(request.params.userId, {
+        success: function(userToUnfollow) {
+            
+            // Verify if is already following
+            new Parse.Query("Follow").equalTo("follower", request.user).equalTo("user", userToUnfollow).first({
+                success: function (alreadyFollow) {
+                    response.success(alreadyFollow ? true : false);
+                },
+                error: function (error) {
+                    response.error("Already follow query error: " + error.code);
+                }
+            });
+        },
+        error: function(object, error) {
+            response.error("User query error: " + error.code);
+        }
+    });  
+});
+
+/*
     Used when a user wants to post a poll.
     Parameters:
     - to: Array of user IDs that will be able to see and vote, also send a notification about the new poll
