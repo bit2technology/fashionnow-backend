@@ -443,7 +443,7 @@ Parse.Cloud.define('followUser', function (request, response) {
                                             }
                                         });
                                         
-                                        response.success(request.user);
+                                        response.success([request.user, userToFollow]);
                                     },
                                     error: function (error) {
                                         response.error("Save error: " + error.code);
@@ -516,7 +516,7 @@ Parse.Cloud.define('unfollowUser', function (request, response) {
                                         
                                         alreadyFollow.destroy({
                                             success: function (list) {
-                                                response.success(request.user);
+                                                response.success([request.user, userToUnfollow]);
                                             },
                                             error: function (error) {
                                                 response.error("Destroy error: " + error.code);
