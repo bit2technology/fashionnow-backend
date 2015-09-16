@@ -145,7 +145,7 @@ Parse.Cloud.define('followUser', function (request, response) {
                                 }
                                 // Save
                                 Parse.Object.saveAll(objectsToSave, {
-                                    success: function (list) {
+                                    success: function (savedList) {
                                         
                                         // Send push
                                         var locTitle = "P004";
@@ -169,7 +169,7 @@ Parse.Cloud.define('followUser', function (request, response) {
                                             }
                                         });
                                         
-                                        response.success([request.user, userToFollow]);
+                                        response.success(savedList);
                                     },
                                     error: function (error) {
                                         response.error("Save error: " + error.code);
@@ -296,7 +296,7 @@ Parse.Cloud.define('isFollowing', function (request, response) {
                 success: function (alreadyFollow) {
                     response.success(alreadyFollow ? true : false);
                 },
-                error: function (error) {
+                error: function (object, error) {
                     response.error("Already follow query error: " + error.code);
                 }
             });
@@ -377,3 +377,38 @@ var removeDiacritics = require('cloud/diacritics').remove;
 function searchField (user) {
     return removeDiacritics((user.get("name") || "") + " " + (user.get("username") || "") + " " + (user.get("email") || "") + " " + (user.get("location") || "")).toLowerCase();
 }
+
+/*
+    IN DEVELOPMENT - DO NOT USE ON PUBLIC CODE YET!!!!!!!
+*/
+Parse.Cloud.define("userList", function (request, response) {
+    
+    var user = request.user;
+    var auth = user.get("authData");
+        var facebookAuth = auth ? auth.facebook : null;
+        if (facebookAuth && facebookAuth.access_token) {
+            var url = "https://graph.facebook.com/me/friends?fields=id&limit=9999999999&access_token=" + facebookAuth.access_token;
+            Parse.Cloud.httpRequest({
+                url: url,
+                success: function(httpResponse) {
+                    var facebookUsers = JSON.parse(httpResponse.text).data;
+                    var facebookIds = [];
+                    for (var i = 0; i < facebookUsers.length; i++) {
+                        facebookIds.push(facebookUsers[i].id);
+                    }
+                    new Parse.Query(Parse.User).containedIn("facebookId", facebookIds).find({
+                        success: function(users) {
+                            response.success(users);
+                        }, error: function(error) {
+                            response.error("Facebookk error" + error.code);
+                        }
+                    });
+                },
+                error: function(httpResponse) {
+                    response.error('Facebook request error: ' + httpResponse.status + " " + JSON.parse(httpResponse.text).error.message);
+                }
+            });
+        } else {
+            response.error("No facebook data");
+        }
+});

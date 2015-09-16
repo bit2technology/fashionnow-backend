@@ -105,7 +105,7 @@ Parse.Cloud.define("votePoll", function (request, response) {
                         Parse.Object.saveAll([poll, vote], {
                             useMasterKey: true,
                             success: function (list) {
-                                response.success(true);
+                                response.success(poll);
                             },
                             error: function (error) {
                                 response.error("Save error: " + error.code);
@@ -125,12 +125,32 @@ Parse.Cloud.define("votePoll", function (request, response) {
 });
 
 /*
+    Used to inform that the user finished all polls to vote.
+*/
+Parse.Cloud.define("finishedVoting", function (request, response) {
+
+    // Verifying parameters
+    if (!request.user) {
+        response.error("There is no user making the request, or user is not saved");
+    }
+    
+    request.user.set("finishedVoting", true).save({
+        success: function (user) {
+            response.success(true);
+        },
+        error: function (error) {
+            response.error("Save error: " + error.code);
+        }
+    });
+});
+
+/*
     Used when a user wants to post a poll.
     Parameters:
-    - to: Array of user IDs that will be able to see and vote, also send a notification about the new poll
+    - to (optional): Array of user IDs that will be able to see and vote, also send a notification about the new poll. If this param is not set, the poll will be public.
     - leftId: ID of the left photo. Attention: this field won't be checked! The developer must provide a valid photo ID on its own.
     - rightId: ID of the right photo. Attention: this field won't be checked! The developer must provide a valid photo ID on its own.
-    - caption (optional): description of the poll
+    - caption (optional): description of the poll.
     Push sent:
     - Title: New Poll (P001)
     - Body: <user_display_name> needs help (P002) *OR* <user_display_name> needs help: "<poll_caption>" (P003)
@@ -143,47 +163,70 @@ Parse.Cloud.define("postPoll", function (request, response) {
         response.error("There is no user making the request, or user is not saved");
     } else if (!request.user.get("emailVerified") && !request.user.get("facebookId")) {
         response.error("The user has not verified email or Facebook account");
-    } else if (!request.params.to) {
-        response.error("Parameter missing: to - Array of user IDs to send the notification");
     } else if (!request.params.leftId) {
         response.error("Parameter missing: leftId - ID of the left photo");
     } else if (!request.params.rightId) {
         response.error("Parameter missing: rightId - ID of the right photo");
     }
     
+    var acl = new Parse.ACL(request.user);
+    if (request.params.to) {
+        for (var i = 0; i < request.params.to.length; i++) {
+            acl.setReadAccess(request.params.to[i], true);
+        }
+    } else {
+        acl.setPublicReadAccess(true);
+    }
+    
     var ParsePhoto = Parse.Object.extend("Photo");
-
-    // // Declare localized variables
-    // var locKey = "P002",
-    //     locArgs = [request.user.get("name") || request.user.get("username")];
-
-    // // Change notification style if there is a caption
-    // if (request.params.caption) {
-    //     locKey = "P003";
-    //     locArgs.push(request.params.caption);
-    // }
-
-    // // Send push notification
-    // var query = new Parse.Query(Parse.Installation).containedIn("userId", request.params.to).greaterThanOrEqualTo("pushVersion", 1);
-    // Parse.Push.send({
-    //     where: query,
-    //     data: {
-    //         alert: {
-    //             "title-loc-key": "P001",
-    //             "loc-key": locKey,
-    //             "loc-args": locArgs
-    //         },
-    //         badge: "Increment",
-    //         poll: request.params.poll
-    //     }
-    // }, {
-    //     success: function () {
-    //         // Push successfull
-    //         response.success("Success");
-    //     },
-    //     error: function (error) {
-    //         // Handle error
-    //         response.error("Error: " + error);
-    //     }
-    // });
+    var photos = [ParsePhoto.createWithoutData(request.params.leftId), ParsePhoto.createWithoutData(request.params.rightId)];
+    for (var i = 0; i < photos.length; i++) {
+        photos[i].setACL(new Parse.ACL(request.user).setPublicReadAccess(true));
+    }
+    
+    var locKey = "P002";
+    var locArgs = [request.user.get("displayName")];
+    
+    var poll = new Parse.Object("Poll").setACL(acl).set("createdBy", request.user).set("photos", photos).set("version", 2);
+    if (request.params.caption) {
+        poll.set("caption", request.params.caption);
+        locKey = "P003";
+        locArgs.push(request.params.caption);
+    }
+    if (request.params.to) {
+        poll.set("userIds", request.params.to);
+    }
+    
+    poll.save({
+        success: function(poll) {
+            
+            var toQuery = new Parse.Query(Parse.Installation).containedIn("userId", request.params.to).greaterThanOrEqualTo("pushVersion", 1);
+            
+            Parse.Push.send({
+                where: toQuery,
+                data: {
+                    alert: {
+                        "title-loc-key": "P001",
+                        "loc-key": locKey,
+                        "loc-args": locArgs
+                    },
+                    badge: "Increment",
+                    poll: request.params.poll
+                }
+            }, {
+                success: function () {
+                    // Push successfull
+                    response.success(poll);
+                },
+                error: function (error) {
+                    // Handle error
+                    console.error("Push send error: " + error.code);
+                    response.success(poll);
+                }
+            });
+        },
+        error: function(poll, error) {
+            response.error("Poll save error " + error.code);
+        }
+    });
 });

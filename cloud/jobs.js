@@ -101,7 +101,7 @@ Parse.Cloud.job("fixPhotos", function (request, status) {
         acl.setWriteAccess(photo.get("userId"), true);
         acl.setPublicReadAccess(true);
         photo.setACL(acl);
-        return photo.save()
+        return photo.save();
     }).then(function() {
         // Set the job's success status
         status.success("Migration completed successfully.");
