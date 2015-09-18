@@ -30,27 +30,6 @@ Parse.Cloud.define("searchUsers", function (request, response) {
 });
 
 /*
-    Used to get user recomendations.
-    Returns:
-    - Array of Users
-*/
-Parse.Cloud.define("trendingUsers", function (request, response) {
-
-    var query = new Parse.Query(Parse.User).exists("search").descending("followers");
-    if (request.user) {
-        query.notEqualTo("id", request.user.id);
-    }
-    query.find({
-        success: function (results) {
-            response.success(results);
-        },
-        error: function (error) {
-            response.error(error);
-        }
-    });
-});
-
-/*
     Used to block unwanted users. Only affects the user making the request.
     Parameters:
     - userId: Id of user to block. Attention: this field won't be checked! The developer must provide a valid user ID on its own.
@@ -287,12 +266,12 @@ Parse.Cloud.define('isFollowing', function (request, response) {
         response.error("Parameter wrong: userId - User cannot (un)follow itself");
     }
 
-    // Get user to unfollow
+    // Get user to check status
     new Parse.Query(Parse.User).get(request.params.userId, {
-        success: function(userToUnfollow) {
+        success: function(userToCheck) {
             
             // Verify if is already following
-            new Parse.Query("Follow").equalTo("follower", request.user).equalTo("user", userToUnfollow).first({
+            new Parse.Query("Follow").equalTo("follower", request.user).equalTo("user", userToCheck).first({
                 success: function (alreadyFollow) {
                     response.success(alreadyFollow ? true : false);
                 },
@@ -383,11 +362,35 @@ function searchField (user) {
 */
 Parse.Cloud.define("userList", function (request, response) {
     
+    // Verifying parameters
+    if (!request.user && !request.params.userId) {
+        response.error("There is no user making the request, user is not saved or param userId is not set");
+    }
     var user = request.user;
-    var auth = user.get("authData");
+    if (request.params.userId) {
+        user = Parse.User.createWithoutData(request.params.userId);
+    }
+    
+    if (request.params.type == "trending") {
+        var query = new Parse.Query(Parse.User).exists("search").descending("followers");
+        if (request.user) {
+            query.notEqualTo("id", request.user.id);
+        }
+        query.find({
+            success: function (results) {
+                response.success(results);
+            },
+            error: function (error) {
+                response.error("Trending error " + error.code);
+            }
+        });
+    }
+    else if (request.params.type == "facebook") {
+        // Show friends from Facebook that also have logged on the App.
+        var auth = request.user.get("authData");
         var facebookAuth = auth ? auth.facebook : null;
         if (facebookAuth && facebookAuth.access_token) {
-            var url = "https://graph.facebook.com/me/friends?fields=id&limit=9999999999&access_token=" + facebookAuth.access_token;
+            var url = "https://graph.facebook.com/me/friends?fields=id&limit=" + Number.MAX_SAFE_INTEGER + "&access_token=" + facebookAuth.access_token;
             Parse.Cloud.httpRequest({
                 url: url,
                 success: function(httpResponse) {
@@ -400,15 +403,61 @@ Parse.Cloud.define("userList", function (request, response) {
                         success: function(users) {
                             response.success(users);
                         }, error: function(error) {
-                            response.error("Facebookk error" + error.code);
+                            response.error("Facebook error" + error.code);
                         }
                     });
                 },
                 error: function(httpResponse) {
-                    response.error('Facebook request error: ' + httpResponse.status + " " + JSON.parse(httpResponse.text).error.message);
+                    response.error("Facebook request error: " + httpResponse.status + " " + JSON.parse(httpResponse.text).error.message);
                 }
             });
         } else {
             response.error("No facebook data");
         }
+    }
+    else if (request.params.type == "followers") {
+        // Show followers
+        new Parse.Query("Follow").equalTo("user", user).find({
+            success: function(followersFollows) {
+                var followers = [];
+                for (var i = 0; i < followersFollows.length; i++) {
+                    followers.push(followersFollows[i].get("follower"));
+                }
+                response.success(followers);
+            },
+            error: function(error) {
+                response.error("Followers error " + error.code);
+            }
+        });
+    }
+    else if (request.params.type == "following") {
+        // Show following
+        new Parse.Query("Follow").equalTo("follower", user).find({
+            success: function(followingFollows) {
+                var following = [];
+                for (var i = 0; i < followingFollows.length; i++) {
+                    following.push(followingFollows[i].get("user"));
+                }
+                response.success(following);
+            },
+            error: function(error) {
+                response.error("Following error " + error.code);
+            }
+        });
+    }
+    else {
+        // Show friends within the App (both follow each other)
+        new Parse.Query("Follow").equalTo("follower", user).equalTo("mutual", true).find({
+            success: function(friendsFollows) {
+                var friends = [];
+                for (var i = 0; i < friendsFollows.length; i++) {
+                    friends.push(friendsFollows[i].get("user"));
+                }
+                response.success(friends);
+            },
+            error: function(error) {
+                response.error("Friends error " + error.code);
+            }
+        });
+    }
 });

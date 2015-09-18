@@ -95,3 +95,24 @@ Parse.Cloud.define("sendPush", function (request, response) {
         }
     });
 });
+
+/*
+    Used to get user recomendations.
+    Returns:
+    - Array of Users
+*/
+Parse.Cloud.define("trendingUsers", function (request, response) {
+
+    var query = new Parse.Query(Parse.User).exists("search").descending("followers");
+    if (request.user) {
+        query.notEqualTo("id", request.user.id);
+    }
+    query.find({
+        success: function (results) {
+            response.success(results);
+        },
+        error: function (error) {
+            response.error(error);
+        }
+    });
+});
