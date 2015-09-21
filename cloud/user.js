@@ -363,12 +363,12 @@ function searchField (user) {
 Parse.Cloud.define("userList", function (request, response) {
     
     // Verifying parameters
-    if (!request.user && !request.params.userId) {
-        response.error("There is no user making the request, user is not saved or param userId is not set");
-    }
     var user = request.user;
     if (request.params.userId) {
         user = Parse.User.createWithoutData(request.params.userId);
+    }
+    if (!user) {
+        response.error("There is no user making the request, user is not saved or param userId is not set");
     }
     
     if (request.params.type == "trending") {
@@ -417,7 +417,7 @@ Parse.Cloud.define("userList", function (request, response) {
     }
     else if (request.params.type == "followers") {
         // Show followers
-        new Parse.Query("Follow").equalTo("user", user).find({
+        new Parse.Query("Follow").include("follower").equalTo("user", user).find({
             success: function(followersFollows) {
                 var followers = [];
                 for (var i = 0; i < followersFollows.length; i++) {
@@ -432,7 +432,7 @@ Parse.Cloud.define("userList", function (request, response) {
     }
     else if (request.params.type == "following") {
         // Show following
-        new Parse.Query("Follow").equalTo("follower", user).find({
+        new Parse.Query("Follow").include("user").equalTo("follower", user).find({
             success: function(followingFollows) {
                 var following = [];
                 for (var i = 0; i < followingFollows.length; i++) {
@@ -447,7 +447,7 @@ Parse.Cloud.define("userList", function (request, response) {
     }
     else {
         // Show friends within the App (both follow each other)
-        new Parse.Query("Follow").equalTo("follower", user).equalTo("mutual", true).find({
+        new Parse.Query("Follow").include("user").equalTo("follower", user).equalTo("mutual", true).find({
             success: function(friendsFollows) {
                 var friends = [];
                 for (var i = 0; i < friendsFollows.length; i++) {
