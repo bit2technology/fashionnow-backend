@@ -200,28 +200,40 @@ Parse.Cloud.define("postPoll", function (request, response) {
     poll.save({
         success: function(poll) {
             
-            var toQuery = new Parse.Query(Parse.Installation).containedIn("userId", request.params.to).greaterThanOrEqualTo("pushVersion", 1);
-            
-            Parse.Push.send({
-                where: toQuery,
-                data: {
-                    alert: {
-                        "title-loc-key": "P001",
-                        "loc-key": locKey,
-                        "loc-args": locArgs
-                    },
-                    badge: "Increment",
-                    poll: request.params.poll
-                }
-            }, {
-                success: function () {
-                    // Push successfull
-                    response.success(poll);
+            new Parse.Query("Follow").include("follower").equalTo("user", request.user).find({
+                success: function(followersFollows) {
+                    
+                    var followers = [];
+                    for (var i = 0; i < followersFollows.length; i++) {
+                        followers.push(followersFollows[i].get("follower").id);
+                    }
+                    request.params.to.concat(followers);
+                    
+                    Parse.Push.send({
+                        where: new Parse.Query(Parse.Installation).containedIn("userId", request.params.to).greaterThanOrEqualTo("pushVersion", 1),
+                        data: {
+                            alert: {
+                                "title-loc-key": "P001",
+                                "loc-key": locKey,
+                                "loc-args": locArgs
+                            },
+                            badge: "Increment",
+                            poll: request.params.poll
+                        }
+                    }, {
+                        success: function () {
+                            // Push successfull
+                            response.success(poll);
+                        },
+                        error: function (error) {
+                            // Handle error
+                            console.error("Push send error: " + error.code);
+                            response.success(poll);
+                        }
+                    });
                 },
-                error: function (error) {
-                    // Handle error
-                    console.error("Push send error: " + error.code);
-                    response.success(poll);
+                error: function(error) {
+                    response.error("Followers error " + error.code);
                 }
             });
         },
