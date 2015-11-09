@@ -19,11 +19,11 @@ Parse.Cloud.define("reportPoll", function (request, response) {
     } else if (!request.params.pollId) {
        response.error("Parameter missing: pollId - Id of poll voted");
     }
-    
+
     // Get poll
     new Parse.Query("Poll").get(request.params.pollId, {
         success: function(poll) {
-            
+
             // Create report
             var acl = new Parse.ACL();
             acl.setReadAccess(request.user.id, true);
@@ -34,7 +34,7 @@ Parse.Cloud.define("reportPoll", function (request, response) {
             Parse.Object.saveAll([poll, report], {
                 useMasterKey: true,
                 success: function (list) {
-                    
+
                     Parse.Push.send({
                         channels: ["report"],
                         data: {
@@ -46,7 +46,7 @@ Parse.Cloud.define("reportPoll", function (request, response) {
                             pollId: poll.id
                         }
                     });
-                    
+
                     response.success(true);
                 },
                 error: function (error) {
@@ -75,22 +75,22 @@ Parse.Cloud.define("votePoll", function (request, response) {
         response.error("Parameter missing: pollId - Id of poll voted");
     } else if (request.params.vote === undefined) {
         response.error("Parameter missing: vote - one of the options 1 (left), 2 (right) or 0 (skip)");
-    } else if (request.params.vote != 1 && request.params.vote != 2 && request.params.vote != 0) {
+    } else if (request.params.vote !== 1 && request.params.vote !== 2 && request.params.vote !== 0) {
         response.error("Parameter wrong: vote - is neither 1 (left), 2 (right) or 0 (skip)");
     }
-    
+
     // Get poll
     new Parse.Query("Poll").get(request.params.pollId, {
         success: function(poll) {
-            
+
             // Verify if user already voted
             new Parse.Query("Vote").equalTo("voteBy", request.user).equalTo("pollId", poll.id).first({
                 success: function (equalVote) {
-                    
+
                     if (equalVote) { // Found a vote with this user and this pollId
                         response.error("Error: User already voted");
                     } else {
-                        
+
                         // Create vote
                         var acl = new Parse.ACL();
                         acl.setReadAccess(request.user.id, true);
@@ -133,7 +133,7 @@ Parse.Cloud.define("finishedVoting", function (request, response) {
     if (!request.user) {
         response.error("There is no user making the request, or user is not saved");
     }
-    
+
     request.user.set("finishedVoting", true).save({
         success: function (user) {
             response.success(true);
@@ -168,7 +168,7 @@ Parse.Cloud.define("postPoll", function (request, response) {
     } else if (!request.params.rightId) {
         response.error("Parameter missing: rightId - ID of the right photo");
     }
-    
+
     var acl = new Parse.ACL(request.user);
     if (request.params.to) {
         for (var i = 0; i < request.params.to.length; i++) {
@@ -177,16 +177,16 @@ Parse.Cloud.define("postPoll", function (request, response) {
     } else {
         acl.setPublicReadAccess(true);
     }
-    
+
     var ParsePhoto = Parse.Object.extend("Photo");
     var photos = [ParsePhoto.createWithoutData(request.params.leftId), ParsePhoto.createWithoutData(request.params.rightId)];
-    for (var i = 0; i < photos.length; i++) {
-        photos[i].setACL(new Parse.ACL(request.user).setPublicReadAccess(true));
+    for (var j = 0; j < photos.length; j++) {
+        photos[j].setACL(new Parse.ACL(request.user).setPublicReadAccess(true));
     }
-    
+
     var locKey = "P002";
     var locArgs = [request.user.get("displayName")];
-    
+
     var poll = new Parse.Object("Poll").setACL(acl).set("createdBy", request.user).set("photos", photos).set("version", 2);
     if (request.params.caption) {
         poll.set("caption", request.params.caption);
@@ -196,19 +196,19 @@ Parse.Cloud.define("postPoll", function (request, response) {
     if (request.params.to) {
         poll.set("userIds", request.params.to);
     }
-    
+
     poll.save({
         success: function(poll) {
-            
+
             new Parse.Query("Follow").include("follower").equalTo("user", request.user).find({
                 success: function(followersFollows) {
-                    
+
                     var followers = [];
                     for (var i = 0; i < followersFollows.length; i++) {
                         followers.push(followersFollows[i].get("follower").id);
                     }
                     request.params.to.concat(followers);
-                    
+
                     Parse.Push.send({
                         where: new Parse.Query(Parse.Installation).containedIn("userId", request.params.to).greaterThanOrEqualTo("pushVersion", 1),
                         data: {

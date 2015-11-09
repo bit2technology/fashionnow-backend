@@ -42,7 +42,7 @@ Parse.Cloud.define("blockUser", function (request, response) {
     } else if (!request.params.userId) {
        response.error("Parameter missing: userId - Id of user to block");
     }
-    
+
     // Create and save block info
     var acl = new Parse.ACL(request.user);
     var block = new Parse.Object("Block").setACL(acl).set("user", request.user).set("blocked", Parse.User.createWithoutData(request.params.userId));
@@ -94,19 +94,19 @@ Parse.Cloud.define('followUser', function (request, response) {
             if (followingAnon) {
                 response.error("The user to follow cannot be anonymous");
             }
-            
+
             // Verify if is already following
             new Parse.Query("Follow").equalTo("follower", request.user).equalTo("user", userToFollow).first({
                 success: function (alreadyFollow) {
-                    
+
                     if (alreadyFollow) { // User is already following
                         response.error("Error: User is already following");
                     } else {
-                        
+
                         // Verify if it is mutual
                         new Parse.Query("Follow").equalTo("follower", userToFollow).equalTo("user", request.user).first({
                             success: function (mutualFollow) {
-                                
+
                                 // Create follow
                                 var acl = new Parse.ACL(request.user);
                                 acl.setPublicReadAccess(true);
@@ -125,7 +125,7 @@ Parse.Cloud.define('followUser', function (request, response) {
                                 // Save
                                 Parse.Object.saveAll(objectsToSave, {
                                     success: function (savedList) {
-                                        
+
                                         // Send push
                                         var locTitle = "P004";
                                         var locKey = "P005";
@@ -134,7 +134,7 @@ Parse.Cloud.define('followUser', function (request, response) {
                                             locTitle = "P006";
                                             locKey = "P007";
                                         }
-                                        
+
                                         Parse.Push.send({
                                             where: new Parse.Query(Parse.Installation).equalTo("userId", userToFollow.id).greaterThanOrEqualTo("pushVersion", 2),
                                             data: {
@@ -147,13 +147,13 @@ Parse.Cloud.define('followUser', function (request, response) {
                                                 userId: request.user.id
                                             }
                                         });
-                                        
+
                                         response.success(savedList);
                                     },
                                     error: function (error) {
                                         response.error("Save error: " + error.code);
                                     }
-                                }); 
+                                });
                             },
                             error: function (error) {
                                 response.error("Mutual follow query error: " + error.code);
@@ -169,7 +169,7 @@ Parse.Cloud.define('followUser', function (request, response) {
         error: function(object, error) {
             response.error("User query error: " + error.code);
         }
-    });  
+    });
 });
 
 /*
@@ -192,19 +192,19 @@ Parse.Cloud.define('unfollowUser', function (request, response) {
     // Get user to unfollow
     new Parse.Query(Parse.User).get(request.params.userId, {
         success: function(userToUnfollow) {
-            
+
             // Verify if is already following
             new Parse.Query("Follow").equalTo("follower", request.user).equalTo("user", userToUnfollow).first({
                 success: function (alreadyFollow) {
-                    
+
                     if (!alreadyFollow) { // User is not following
                         response.error("Error: User is not following");
                     } else {
-                        
+
                         // Verify if it is mutual
                         new Parse.Query("Follow").equalTo("follower", userToUnfollow).equalTo("user", request.user).first({
                             success: function (mutualFollow) {
-                                
+
                                 var objectsToSave = [request.user, userToUnfollow];
                                 // Update users
                                 request.user.increment("following", -1);
@@ -218,7 +218,7 @@ Parse.Cloud.define('unfollowUser', function (request, response) {
                                 // Save
                                 Parse.Object.saveAll(objectsToSave, {
                                     success: function (list) {
-                                        
+
                                         alreadyFollow.destroy({
                                             success: function (list) {
                                                 response.success([request.user, userToUnfollow]);
@@ -231,7 +231,7 @@ Parse.Cloud.define('unfollowUser', function (request, response) {
                                     error: function (error) {
                                         response.error("Save error: " + error.code);
                                     }
-                                }); 
+                                });
                             },
                             error: function (error) {
                                 response.error("Mutual follow query error: " + error.code);
@@ -247,7 +247,7 @@ Parse.Cloud.define('unfollowUser', function (request, response) {
         error: function(object, error) {
             response.error("User query error: " + error.code);
         }
-    });  
+    });
 });
 
 /*
@@ -269,7 +269,7 @@ Parse.Cloud.define('isFollowing', function (request, response) {
     // Get user to check status
     new Parse.Query(Parse.User).get(request.params.userId, {
         success: function(userToCheck) {
-            
+
             // Verify if is already following
             new Parse.Query("Follow").equalTo("follower", request.user).equalTo("user", userToCheck).first({
                 success: function (alreadyFollow) {
@@ -283,7 +283,7 @@ Parse.Cloud.define('isFollowing', function (request, response) {
         error: function(object, error) {
             response.error("User query error: " + error.code);
         }
-    });  
+    });
 });
 
 /*
@@ -331,7 +331,7 @@ Parse.Cloud.beforeSave(Parse.User, function (request, response) {
     var facebookAuth = auth ? auth.facebook : null;
     // Update facebookId
     request.object.set("facebookId", facebookAuth ? facebookAuth.id : null);
-    
+
     // Set canonical search field if user is not anonymous
     var anonymous = auth ? auth.anonymous : null;
     if (anonymous) {
@@ -339,7 +339,7 @@ Parse.Cloud.beforeSave(Parse.User, function (request, response) {
     } else {
         request.object.set("search", searchField(request.object));
     }
-    
+
     // Set display name
     if (request.object.get("name")) {
         request.object.set("displayName", request.object.get("name"));
@@ -361,7 +361,7 @@ function searchField (user) {
     IN DEVELOPMENT - DO NOT USE ON PUBLIC CODE YET!!!!!!!
 */
 Parse.Cloud.define("userList", function (request, response) {
-    
+
     // Verifying parameters
     var user = request.user;
     if (request.params.userId) {
@@ -370,7 +370,7 @@ Parse.Cloud.define("userList", function (request, response) {
     if (!user) {
         response.error("There is no user making the request, user is not saved or param userId is not set");
     }
-    
+
     if (request.params.type == "trending") {
         var query = new Parse.Query(Parse.User).exists("search").descending("followers");
         if (request.user) {
